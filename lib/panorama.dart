@@ -138,8 +138,8 @@ class Panorama extends StatefulWidget {
 class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin {
   Scene? scene;
   Object? surface;
-  late double latitude;
-  late double longitude;
+  late double latitudeRad;
+  late double longitudeRad;
   double latitudeDelta = 0;
   double longitudeDelta = 0;
   double zoomDelta = 0;
@@ -149,7 +149,7 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
   double _dampingFactor = 0.05;
   double _animateDirection = 1.0;
   late AnimationController _controller;
-  double screenOrientation = 0.0;
+  double screenOrientationRad = 0.0;
   Vector3 orientation = Vector3(0, radians(90), 0);
   StreamSubscription? _orientationSubscription;
   StreamSubscription? _screenOrientSubscription;
@@ -205,10 +205,10 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     // auto rotate
     longitudeDelta += 0.001 * widget.animSpeed;
     // animate vertical rotating
-    latitude += latitudeDelta * _dampingFactor * widget.sensitivity;
+    latitudeRad += latitudeDelta * _dampingFactor * widget.sensitivity;
     latitudeDelta *= 1 - _dampingFactor * widget.sensitivity;
     // animate horizontal rotating
-    longitude += _animateDirection * longitudeDelta * _dampingFactor * widget.sensitivity;
+    longitudeRad += _animateDirection * longitudeDelta * _dampingFactor * widget.sensitivity;
     longitudeDelta *= 1 - _dampingFactor * widget.sensitivity;
     // animate zomming
     final double zoom = scene!.camera.zoom + zoomDelta * _dampingFactor;
@@ -224,7 +224,7 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     }
 
     // rotate for screen orientation
-    Quaternion q = Quaternion.axisAngle(Vector3(0, 0, 1), screenOrientation);
+    Quaternion q = Quaternion.axisAngle(Vector3(0, 0, 1), screenOrientationRad);
     // rotate for device orientation
     q *= Quaternion.euler(-orientation.z, -orientation.y, -orientation.x);
     // rotate to latitude zero
@@ -238,11 +238,11 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     final double maxLon = radians(widget.maxLongitude);
     final double lat = (-o.y).clamp(minLat, maxLat);
     final double lon = o.x.clamp(minLon, maxLon);
-    if (lat + latitude < minLat) latitude = minLat - lat;
-    if (lat + latitude > maxLat) latitude = maxLat - lat;
+    if (lat + latitudeRad < minLat) latitudeRad = minLat - lat;
+    if (lat + latitudeRad > maxLat) latitudeRad = maxLat - lat;
     if (maxLon - minLon < math.pi * 2) {
-      if (lon + longitude < minLon || lon + longitude > maxLon) {
-        longitude = (lon + longitude < minLon ? minLon : maxLon) - lon;
+      if (lon + longitudeRad < minLon || lon + longitudeRad > maxLon) {
+        longitudeRad = (lon + longitudeRad < minLon ? minLon : maxLon) - lon;
         // reverse rotation when reaching the boundary
         if (widget.animSpeed != 0) {
           if (widget.animReverse)
@@ -259,9 +259,9 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     // rotate to longitude zero
     q *= Quaternion.axisAngle(Vector3(0, 1, 0), -math.pi * 0.5);
     // rotate around the global Y axis
-    q *= Quaternion.axisAngle(Vector3(0, 1, 0), longitude);
+    q *= Quaternion.axisAngle(Vector3(0, 1, 0), longitudeRad);
     // rotate around the local X axis
-    q = Quaternion.axisAngle(Vector3(1, 0, 0), -latitude) * q;
+    q = Quaternion.axisAngle(Vector3(1, 0, 0), -latitudeRad) * q;
 
     o = quaternionToOrientation(q * Quaternion.axisAngle(Vector3(0, 1, 0), math.pi * 0.5));
     widget.onViewChanged?.call(degrees(o.x), degrees(-o.y), degrees(o.z));
@@ -293,7 +293,7 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     _screenOrientSubscription?.cancel();
     if (widget.sensorControl != SensorControl.None) {
       _screenOrientSubscription = motionSensors.screenOrientation.listen((ScreenOrientationEvent event) {
-        screenOrientation = radians(event.angle!);
+        screenOrientationRad = radians(event.angle!);
       });
     }
   }
@@ -393,8 +393,8 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    latitude = degrees(widget.latitude);
-    longitude = degrees(widget.longitude);
+    latitudeRad = radians(widget.latitude);
+    longitudeRad = radians(widget.longitude);
     _streamController = StreamController<Null>.broadcast();
     _stream = _streamController.stream;
 
