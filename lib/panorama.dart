@@ -279,12 +279,14 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
         motionSensors.orientationUpdateInterval = Duration.microsecondsPerSecond ~/ 60;
         _orientationSubscription = motionSensors.orientation.listen((OrientationEvent event) {
           orientation.setValues(event.yaw, event.pitch, event.roll);
+          _updateView();
         });
         break;
       case SensorControl.AbsoluteOrientation:
         motionSensors.absoluteOrientationUpdateInterval = Duration.microsecondsPerSecond ~/ 60;
         _orientationSubscription = motionSensors.absoluteOrientation.listen((AbsoluteOrientationEvent event) {
           orientation.setValues(event.yaw, event.pitch, event.roll);
+          _updateView();
         });
         break;
       default:
