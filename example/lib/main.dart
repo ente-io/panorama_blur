@@ -1,7 +1,8 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:panorama/panorama.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:panorama/panorama.dart';
 
 void main() => runApp(MyApp());
 
@@ -75,7 +76,6 @@ class _MyHomePageState extends State<MyHomePage> {
     switch (_panoId % panoImages.length) {
       case 0:
         panorama = Panorama(
-          animSpeed: 1.0,
           sensorControl: SensorControl.Orientation,
           onViewChanged: onViewChanged,
           onTap: (longitude, latitude, tilt) => print('onTap: $longitude, $latitude, $tilt'),
@@ -110,7 +110,6 @@ class _MyHomePageState extends State<MyHomePage> {
         break;
       case 2:
         panorama = Panorama(
-          animSpeed: 1.0,
           sensorControl: SensorControl.Orientation,
           onViewChanged: onViewChanged,
           croppedArea: Rect.fromLTWH(2533.0, 1265.0, 5065.0, 2533.0),
@@ -130,7 +129,6 @@ class _MyHomePageState extends State<MyHomePage> {
         break;
       default:
         panorama = Panorama(
-          animSpeed: 1.0,
           sensorControl: SensorControl.Orientation,
           onViewChanged: onViewChanged,
           child: panoImages[_panoId % panoImages.length],

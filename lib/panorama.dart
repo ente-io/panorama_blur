@@ -1,8 +1,9 @@
 library panorama;
 
 import 'dart:async';
-import 'dart:ui' as ui;
 import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_cube/flutter_cube.dart';
 import 'package:motion_sensors/motion_sensors.dart';
@@ -30,8 +31,7 @@ class Panorama extends StatefulWidget {
     this.maxLongitude = 180.0,
     this.minZoom = 1.0,
     this.maxZoom = 5.0,
-    this.sensitivity = 1.0,
-    this.animSpeed = 0.0,
+    this.panInertia = 0.05,
     this.animReverse = true,
     this.latSegments = 32,
     this.lonSegments = 64,
@@ -77,11 +77,8 @@ class Panorama extends StatefulWidget {
   /// The maximal zomm. default to 5.0
   final double maxZoom;
 
-  /// The sensitivity of the gesture. default to 1.0
-  final double sensitivity;
-
-  /// The Speed of rotation by animation. default to 0.0
-  final double animSpeed;
+  /// default to 0.05
+  final double panInertia;
 
   /// Reverse rotation when the current longitude reaches the minimal or maximum. default to true
   final bool animReverse;
@@ -121,7 +118,7 @@ class Panorama extends StatefulWidget {
 
   /// This event will be called when the user has stopped a long presses, it contains latitude and longitude about where the user pressed.
   final Function(double longitude, double latitude, double tilt)? onLongPressEnd;
-  
+
   /// This event will be called when provided image is loaded on texture.
   final Function()? onImageLoad;
 
@@ -145,8 +142,6 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
   double zoomDelta = 0;
   late Offset _lastFocalPoint;
   double? _lastZoom;
-  double _radius = 500;
-  double _dampingFactor = 0.05;
   double _animateDirection = 1.0;
   late AnimationController _controller;
   double screenOrientationRad = 0.0;
@@ -156,6 +151,12 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
   late StreamController<Null> _streamController;
   Stream<Null>? _stream;
   ImageStream? _imageStream;
+  bool _scaling = false;
+
+  static const double _halfPi = math.pi * .5;
+  static const double _epsilon = .001;
+  static const double _radius = 500;
+  static const double _panReactivity = .8;
 
   void _handleTapUp(TapUpDetails details) {
     final Vector3 o = positionToLatLon(details.localPosition.dx, details.localPosition.dy);
@@ -180,47 +181,63 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
   void _handleScaleStart(ScaleStartDetails details) {
     _lastFocalPoint = details.localFocalPoint;
     _lastZoom = null;
+    _scaling = true;
   }
 
   void _handleScaleUpdate(ScaleUpdateDetails details) {
     final offset = details.localFocalPoint - _lastFocalPoint;
     _lastFocalPoint = details.localFocalPoint;
-    latitudeDelta += widget.sensitivity * 0.5 * math.pi * offset.dy / scene!.camera.viewportHeight;
-    longitudeDelta -= widget.sensitivity * _animateDirection * 0.5 * math.pi * offset.dx / scene!.camera.viewportHeight;
-    if (_lastZoom == null) {
-      _lastZoom = scene!.camera.zoom;
-    }
-    zoomDelta += _lastZoom! * details.scale - (scene!.camera.zoom + zoomDelta);
+    _updatePositionDeltaForOffset(offset);
+
+    final zoom = scene!.camera.zoom;
+    _lastZoom ??= zoom;
+    zoomDelta += _lastZoom! * details.scale - (zoom + zoomDelta);
+
     if (widget.sensorControl == SensorControl.None && !_controller.isAnimating) {
       _controller.reset();
-      if (widget.animSpeed != 0) {
-        _controller.repeat();
-      } else
-        _controller.forward();
+      _controller.forward();
     }
+  }
+
+  void _handleScaleEnd(ScaleEndDetails details) {
+    final offset = details.velocity.pixelsPerSecond / 10;
+    _updatePositionDeltaForOffset(offset);
+    _scaling = false;
+  }
+
+  void _updatePositionDeltaForOffset(ui.Offset offset) {
+    final camera = scene!.camera;
+    final sensitivity = 1 / camera.zoom;
+    final viewportHeight = camera.viewportHeight;
+
+    latitudeDelta += sensitivity * _halfPi * offset.dy / viewportHeight;
+    longitudeDelta -= sensitivity * _animateDirection * _halfPi * offset.dx / viewportHeight;
   }
 
   void _updateView() {
     if (scene == null) return;
-    // auto rotate
-    longitudeDelta += 0.001 * widget.animSpeed;
+
+    final camera = scene!.camera;
+    final damping = _scaling ? _panReactivity : widget.panInertia;
+
     // animate vertical rotating
-    latitudeRad += latitudeDelta * _dampingFactor * widget.sensitivity;
-    latitudeDelta *= 1 - _dampingFactor * widget.sensitivity;
+    latitudeRad += latitudeDelta * damping;
+    latitudeDelta *= 1 - damping;
+
     // animate horizontal rotating
-    longitudeRad += _animateDirection * longitudeDelta * _dampingFactor * widget.sensitivity;
-    longitudeDelta *= 1 - _dampingFactor * widget.sensitivity;
-    // animate zomming
-    final double zoom = scene!.camera.zoom + zoomDelta * _dampingFactor;
-    zoomDelta *= 1 - _dampingFactor;
-    scene!.camera.zoom = zoom.clamp(widget.minZoom, widget.maxZoom);
+    longitudeRad += _animateDirection * longitudeDelta * damping;
+    longitudeDelta *= 1 - damping;
+
+    // animate zooming
+    final double zoom = camera.zoom + zoomDelta * damping;
+    zoomDelta *= 1 - damping;
+    camera.zoom = zoom.clamp(widget.minZoom, widget.maxZoom);
+
     // stop animation if not needed
-    if (latitudeDelta.abs() < 0.001 &&
-        longitudeDelta.abs() < 0.001 &&
-        zoomDelta.abs() < 0.001) {
-      if (widget.sensorControl == SensorControl.None &&
-          widget.animSpeed == 0 &&
-          _controller.isAnimating) _controller.stop();
+    if (latitudeDelta.abs() < _epsilon && longitudeDelta.abs() < _epsilon && zoomDelta.abs() < _epsilon) {
+      if (widget.sensorControl == SensorControl.None && _controller.isAnimating) {
+        _controller.stop();
+      }
     }
 
     // rotate for screen orientation
@@ -228,7 +245,7 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     // rotate for device orientation
     q *= Quaternion.euler(-orientation.z, -orientation.y, -orientation.x);
     // rotate to latitude zero
-    q *= Quaternion.axisAngle(Vector3(1, 0, 0), math.pi * 0.5);
+    q *= Quaternion.axisAngle(Vector3(1, 0, 0), _halfPi);
 
     // check and limit the rotation range
     Vector3 o = quaternionToOrientation(q);
@@ -243,13 +260,6 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     if (maxLon - minLon < math.pi * 2) {
       if (lon + longitudeRad < minLon || lon + longitudeRad > maxLon) {
         longitudeRad = (lon + longitudeRad < minLon ? minLon : maxLon) - lon;
-        // reverse rotation when reaching the boundary
-        if (widget.animSpeed != 0) {
-          if (widget.animReverse)
-            _animateDirection *= -1.0;
-          else
-            _controller.stop();
-        }
       }
     }
     o.x = lon;
@@ -257,17 +267,17 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     q = orientationToQuaternion(o);
 
     // rotate to longitude zero
-    q *= Quaternion.axisAngle(Vector3(0, 1, 0), -math.pi * 0.5);
+    q *= Quaternion.axisAngle(Vector3(0, 1, 0), -_halfPi);
     // rotate around the global Y axis
     q *= Quaternion.axisAngle(Vector3(0, 1, 0), longitudeRad);
     // rotate around the local X axis
     q = Quaternion.axisAngle(Vector3(1, 0, 0), -latitudeRad) * q;
 
-    o = quaternionToOrientation(q * Quaternion.axisAngle(Vector3(0, 1, 0), math.pi * 0.5));
+    o = quaternionToOrientation(q * Quaternion.axisAngle(Vector3(0, 1, 0), _halfPi));
     widget.onViewChanged?.call(degrees(o.x), degrees(-o.y), degrees(o.z));
 
-    q.rotate(scene!.camera.target..setFrom(Vector3(0, 0, -_radius)));
-    q.rotate(scene!.camera.up..setFrom(Vector3(0, 1, 0)));
+    q.rotate(camera.target..setFrom(Vector3(0, 0, -_radius)));
+    q.rotate(camera.up..setFrom(Vector3(0, 1, 0)));
     scene!.update();
     _streamController.add(null);
   }
@@ -318,13 +328,21 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
 
   void _onSceneCreated(Scene scene) {
     this.scene = scene;
-    scene.camera.near = 1.0;
-    scene.camera.far = _radius + 1.0;
-    scene.camera.fov = 75;
-    scene.camera.zoom = widget.zoom;
-    scene.camera.position.setFrom(Vector3(0, 0, 0.1));
+    final camera = scene.camera;
+    camera.near = 1.0;
+    camera.far = _radius + 1.0;
+    camera.fov = 75;
+    camera.zoom = widget.zoom;
+    camera.position.setFrom(Vector3(0, 0, 0.1));
     if (widget.child != null) {
-      final Mesh mesh = generateSphereMesh(radius: _radius, latSegments: widget.latSegments, lonSegments: widget.lonSegments, croppedArea: widget.croppedArea, croppedFullWidth: widget.croppedFullWidth, croppedFullHeight: widget.croppedFullHeight);
+      final Mesh mesh = generateSphereMesh(
+        radius: _radius,
+        latSegments: widget.latSegments,
+        lonSegments: widget.lonSegments,
+        croppedArea: widget.croppedArea,
+        croppedFullWidth: widget.croppedFullWidth,
+        croppedFullHeight: widget.croppedFullHeight,
+      );
       surface = Object(name: 'surface', mesh: mesh, backfaceCulling: false);
       _loadTexture(widget.child!.image);
       scene.world.add(surface!);
@@ -337,48 +355,52 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
   }
 
   Vector3 positionToLatLon(double x, double y) {
+    final camera = scene!.camera;
+
     // transform viewport coordinate to NDC, values between -1 and 1
-    final Vector4 v = Vector4(2.0 * x / scene!.camera.viewportWidth - 1.0, 1.0 - 2.0 * y / scene!.camera.viewportHeight, 1.0, 1.0);
+    final v = Vector4(2.0 * x / camera.viewportWidth - 1.0, 1.0 - 2.0 * y / camera.viewportHeight, 1.0, 1.0);
     // create projection matrix
-    final Matrix4 m = scene!.camera.projectionMatrix * scene!.camera.lookAtMatrix;
+    final m = camera.projectionMatrix * camera.lookAtMatrix;
     // apply inversed projection matrix
     m.invert();
     v.applyMatrix4(m);
     // apply perspective division
     v.scale(1 / v.w);
     // get rotation from two vectors
-    final Quaternion q = Quaternion.fromTwoVectors(v.xyz, Vector3(0.0, 0.0, -_radius));
+    final q = Quaternion.fromTwoVectors(v.xyz, Vector3(0.0, 0.0, -_radius));
     // get euler angles from rotation
-    return quaternionToOrientation(q * Quaternion.axisAngle(Vector3(0, 1, 0), math.pi * 0.5));
+    return quaternionToOrientation(q * Quaternion.axisAngle(Vector3(0, 1, 0), _halfPi));
   }
 
   Vector3 positionFromLatLon(double lat, double lon) {
+    final camera = scene!.camera;
+
     // create projection matrix
-    final Matrix4 m = scene!.camera.projectionMatrix * scene!.camera.lookAtMatrix * matrixFromLatLon(lat, lon);
+    final Matrix4 m = camera.projectionMatrix * camera.lookAtMatrix * matrixFromLatLon(lat, lon);
     // apply projection matrix
     final Vector4 v = Vector4(0.0, 0.0, -_radius, 1.0)..applyMatrix4(m);
     // apply perspective division and transform NDC to the viewport coordinate
     return Vector3(
-      (1.0 + v.x / v.w) * scene!.camera.viewportWidth / 2,
-      (1.0 - v.y / v.w) * scene!.camera.viewportHeight / 2,
+      (1.0 + v.x / v.w) * camera.viewportWidth / 2,
+      (1.0 - v.y / v.w) * camera.viewportHeight / 2,
       v.z,
     );
   }
 
   Widget buildHotspotWidgets(List<Hotspot>? hotspots) {
-    final List<Widget> widgets = <Widget>[];
+    final widgets = <Widget>[];
     if (hotspots != null && scene != null) {
       for (Hotspot hotspot in hotspots) {
-        final Vector3 pos = positionFromLatLon(hotspot.latitude, hotspot.longitude);
-        final Offset orgin = Offset(hotspot.width * hotspot.orgin.dx, hotspot.height * hotspot.orgin.dy);
-        final Matrix4 transform = scene!.camera.lookAtMatrix * matrixFromLatLon(hotspot.latitude, hotspot.longitude);
-        final Widget child = Positioned(
-          left: pos.x - orgin.dx,
-          top: pos.y - orgin.dy,
+        final pos = positionFromLatLon(hotspot.latitude, hotspot.longitude);
+        final origin = Offset(hotspot.width * hotspot.orgin.dx, hotspot.height * hotspot.orgin.dy);
+        final transform = scene!.camera.lookAtMatrix * matrixFromLatLon(hotspot.latitude, hotspot.longitude);
+        final child = Positioned(
+          left: pos.x - origin.dx,
+          top: pos.y - origin.dy,
           width: hotspot.width,
           height: hotspot.height,
           child: Transform(
-            origin: orgin,
+            origin: origin,
             transform: transform..invert(),
             child: Offstage(
               offstage: pos.z < 0,
@@ -403,7 +425,7 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     _updateSensorControl();
 
     _controller = AnimationController(duration: Duration(milliseconds: 60000), vsync: this)..addListener(_updateView);
-    if (widget.sensorControl != SensorControl.None || widget.animSpeed != 0) _controller.repeat();
+    if (widget.sensorControl != SensorControl.None) _controller.repeat();
   }
 
   @override
@@ -449,6 +471,7 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
         ? GestureDetector(
             onScaleStart: _handleScaleStart,
             onScaleUpdate: _handleScaleUpdate,
+            onScaleEnd: _handleScaleEnd,
             onTapUp: widget.onTap == null ? null : _handleTapUp,
             onLongPressStart: widget.onLongPressStart == null ? null : _handleLongPressStart,
             onLongPressMoveUpdate: widget.onLongPressMoveUpdate == null ? null : _handleLongPressMoveUpdate,
