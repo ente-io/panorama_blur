@@ -5,12 +5,12 @@ homepage: https://github.com/zesage/panorama
 publish_to: none
 
 environment:
-  sdk: ">=2.18.0 <3.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  flutter_cube: ^0.1.1
+  flutter_cube:
   motion_sensors:
     git:
       url: https://github.com/deckerst/aves_panorama_motion_sensors.git

@@ -156,7 +156,7 @@ class _MyHomePageState extends State<MyHomePage> {
       floatingActionButton: FloatingActionButton(
         mini: true,
         onPressed: () async {
-          final pickedFile = await picker.getImage(source: ImageSource.gallery);
+          final pickedFile = await picker.pickImage(source: ImageSource.gallery);
           setState(() {
             if (pickedFile != null) {
               panoImages.add(Image.file(File(pickedFile.path)));
