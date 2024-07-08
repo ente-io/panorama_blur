@@ -52,9 +52,9 @@ class _MyHomePageState extends State<MyHomePage> {
       children: [
         TextButton(
           style: ButtonStyle(
-            shape: MaterialStateProperty.all(CircleBorder()),
-            backgroundColor: MaterialStateProperty.all(Colors.black38),
-            foregroundColor: MaterialStateProperty.all(Colors.white),
+            shape: WidgetStateProperty.all(CircleBorder()),
+            backgroundColor: WidgetStateProperty.all(Colors.black38),
+            foregroundColor: WidgetStateProperty.all(Colors.white),
           ),
           child: Icon(icon),
           onPressed: onPressed,
