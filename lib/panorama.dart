@@ -11,13 +11,13 @@ import 'package:motion_sensors/motion_sensors.dart';
 
 enum SensorControl {
   /// No sensor used.
-  None,
+  none,
 
   /// Use gyroscope and accelerometer.
-  Orientation,
+  orientation,
 
   /// Use magnetometer and accelerometer. The logitude 0 points to north.
-  AbsoluteOrientation,
+  absoluteOrientation,
 }
 
 class Panorama extends StatefulWidget {
@@ -37,7 +37,7 @@ class Panorama extends StatefulWidget {
     this.latSegments = 32,
     this.lonSegments = 64,
     this.interactive = true,
-    this.sensorControl = SensorControl.None,
+    this.sensorControl = SensorControl.none,
     this.croppedArea = const Rect.fromLTWH(0.0, 0.0, 1.0, 1.0),
     this.croppedFullWidth = 1.0,
     this.croppedFullHeight = 1.0,
@@ -207,7 +207,7 @@ class _PanoramaState extends State<Panorama>
     _lastZoom ??= zoom;
     zoomDelta += _lastZoom! * details.scale - (zoom + zoomDelta);
 
-    if (widget.sensorControl == SensorControl.None &&
+    if (widget.sensorControl == SensorControl.none &&
         !_controller.isAnimating) {
       _controller.reset();
       _controller.forward();
@@ -253,7 +253,7 @@ class _PanoramaState extends State<Panorama>
     if (latitudeDelta.abs() < _epsilon &&
         longitudeDelta.abs() < _epsilon &&
         zoomDelta.abs() < _epsilon) {
-      if (widget.sensorControl == SensorControl.None &&
+      if (widget.sensorControl == SensorControl.none &&
           _controller.isAnimating) {
         _controller.stop();
       }
@@ -305,7 +305,7 @@ class _PanoramaState extends State<Panorama>
   void _updateSensorControl() {
     _orientationSubscription?.cancel();
     switch (widget.sensorControl) {
-      case SensorControl.Orientation:
+      case SensorControl.orientation:
         motionSensors.orientationUpdateInterval =
             Duration.microsecondsPerSecond ~/ 60;
         _orientationSubscription =
@@ -314,7 +314,7 @@ class _PanoramaState extends State<Panorama>
           _updateView();
         });
         break;
-      case SensorControl.AbsoluteOrientation:
+      case SensorControl.absoluteOrientation:
         motionSensors.absoluteOrientationUpdateInterval =
             Duration.microsecondsPerSecond ~/ 60;
         _orientationSubscription = motionSensors.absoluteOrientation
@@ -327,7 +327,7 @@ class _PanoramaState extends State<Panorama>
     }
 
     _screenOrientSubscription?.cancel();
-    if (widget.sensorControl != SensorControl.None) {
+    if (widget.sensorControl != SensorControl.none) {
       _screenOrientSubscription = motionSensors.screenOrientation
           .listen((ScreenOrientationEvent event) {
         screenOrientationRad = radians(event.angle!);
@@ -497,7 +497,7 @@ class _PanoramaState extends State<Panorama>
     _controller = AnimationController(
         duration: Duration(milliseconds: 60000), vsync: this)
       ..addListener(_updateView);
-    if (widget.sensorControl != SensorControl.None) _controller.repeat();
+    if (widget.sensorControl != SensorControl.none) _controller.repeat();
   }
 
   @override
