@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:blurhash_ffi/blurhash_ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cube/flutter_cube.dart';
 import 'package:motion_sensors/motion_sensors.dart';
@@ -46,6 +47,7 @@ class Panorama extends StatefulWidget {
     this.onLongPressMoveUpdate,
     this.onLongPressEnd,
     this.onImageLoad,
+    this.background,
     this.child,
     this.hotspots,
   }) : super(key: key);
@@ -111,19 +113,25 @@ class Panorama extends StatefulWidget {
   final Function(double longitude, double latitude, double tilt)? onTap;
 
   /// This event will be called when the user has started a long press, it contains latitude and longitude about where the user pressed.
-  final Function(double longitude, double latitude, double tilt)? onLongPressStart;
+  final Function(double longitude, double latitude, double tilt)?
+      onLongPressStart;
 
   /// This event will be called when the user has drag-moved after a long press, it contains latitude and longitude about where the user pressed.
-  final Function(double longitude, double latitude, double tilt)? onLongPressMoveUpdate;
+  final Function(double longitude, double latitude, double tilt)?
+      onLongPressMoveUpdate;
 
   /// This event will be called when the user has stopped a long presses, it contains latitude and longitude about where the user pressed.
-  final Function(double longitude, double latitude, double tilt)? onLongPressEnd;
+  final Function(double longitude, double latitude, double tilt)?
+      onLongPressEnd;
 
   /// This event will be called when provided image is loaded on texture.
   final Function()? onImageLoad;
 
   /// Specify an Image(equirectangular image) widget to the panorama.
   final Image? child;
+
+  /// Specify the thumbnail version of the panorama.
+  final Image? background;
 
   /// Place widgets in the panorama.
   final List<Hotspot>? hotspots;
@@ -132,9 +140,11 @@ class Panorama extends StatefulWidget {
   _PanoramaState createState() => _PanoramaState();
 }
 
-class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin {
+class _PanoramaState extends State<Panorama>
+    with SingleTickerProviderStateMixin {
   Scene? scene;
   Object? surface;
+  Object? surface1;
   late double latitudeRad;
   late double longitudeRad;
   double latitudeDelta = 0;
@@ -159,22 +169,26 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
   static const double _panReactivity = .8;
 
   void _handleTapUp(TapUpDetails details) {
-    final Vector3 o = positionToLatLon(details.localPosition.dx, details.localPosition.dy);
+    final Vector3 o =
+        positionToLatLon(details.localPosition.dx, details.localPosition.dy);
     widget.onTap!(degrees(o.x), degrees(-o.y), degrees(o.z));
   }
 
   void _handleLongPressStart(LongPressStartDetails details) {
-    final Vector3 o = positionToLatLon(details.localPosition.dx, details.localPosition.dy);
+    final Vector3 o =
+        positionToLatLon(details.localPosition.dx, details.localPosition.dy);
     widget.onLongPressStart!(degrees(o.x), degrees(-o.y), degrees(o.z));
   }
 
   void _handleLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
-    final Vector3 o = positionToLatLon(details.localPosition.dx, details.localPosition.dy);
+    final Vector3 o =
+        positionToLatLon(details.localPosition.dx, details.localPosition.dy);
     widget.onLongPressMoveUpdate!(degrees(o.x), degrees(-o.y), degrees(o.z));
   }
 
   void _handleLongPressEnd(LongPressEndDetails details) {
-    final Vector3 o = positionToLatLon(details.localPosition.dx, details.localPosition.dy);
+    final Vector3 o =
+        positionToLatLon(details.localPosition.dx, details.localPosition.dy);
     widget.onLongPressEnd!(degrees(o.x), degrees(-o.y), degrees(o.z));
   }
 
@@ -193,7 +207,8 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     _lastZoom ??= zoom;
     zoomDelta += _lastZoom! * details.scale - (zoom + zoomDelta);
 
-    if (widget.sensorControl == SensorControl.None && !_controller.isAnimating) {
+    if (widget.sensorControl == SensorControl.None &&
+        !_controller.isAnimating) {
       _controller.reset();
       _controller.forward();
     }
@@ -211,7 +226,8 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     final viewportHeight = camera.viewportHeight;
 
     latitudeDelta += sensitivity * _halfPi * offset.dy / viewportHeight;
-    longitudeDelta -= sensitivity * _animateDirection * _halfPi * offset.dx / viewportHeight;
+    longitudeDelta -=
+        sensitivity * _animateDirection * _halfPi * offset.dx / viewportHeight;
   }
 
   void _updateView() {
@@ -234,8 +250,11 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     camera.zoom = zoom.clamp(widget.minZoom, widget.maxZoom);
 
     // stop animation if not needed
-    if (latitudeDelta.abs() < _epsilon && longitudeDelta.abs() < _epsilon && zoomDelta.abs() < _epsilon) {
-      if (widget.sensorControl == SensorControl.None && _controller.isAnimating) {
+    if (latitudeDelta.abs() < _epsilon &&
+        longitudeDelta.abs() < _epsilon &&
+        zoomDelta.abs() < _epsilon) {
+      if (widget.sensorControl == SensorControl.None &&
+          _controller.isAnimating) {
         _controller.stop();
       }
     }
@@ -273,7 +292,8 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     // rotate around the local X axis
     q = Quaternion.axisAngle(Vector3(1, 0, 0), -latitudeRad) * q;
 
-    o = quaternionToOrientation(q * Quaternion.axisAngle(Vector3(0, 1, 0), _halfPi));
+    o = quaternionToOrientation(
+        q * Quaternion.axisAngle(Vector3(0, 1, 0), _halfPi));
     widget.onViewChanged?.call(degrees(o.x), degrees(-o.y), degrees(o.z));
 
     q.rotate(camera.target..setFrom(Vector3(0, 0, -_radius)));
@@ -286,15 +306,19 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     _orientationSubscription?.cancel();
     switch (widget.sensorControl) {
       case SensorControl.Orientation:
-        motionSensors.orientationUpdateInterval = Duration.microsecondsPerSecond ~/ 60;
-        _orientationSubscription = motionSensors.orientation.listen((OrientationEvent event) {
+        motionSensors.orientationUpdateInterval =
+            Duration.microsecondsPerSecond ~/ 60;
+        _orientationSubscription =
+            motionSensors.orientation.listen((OrientationEvent event) {
           orientation.setValues(event.yaw, event.pitch, event.roll);
           _updateView();
         });
         break;
       case SensorControl.AbsoluteOrientation:
-        motionSensors.absoluteOrientationUpdateInterval = Duration.microsecondsPerSecond ~/ 60;
-        _orientationSubscription = motionSensors.absoluteOrientation.listen((AbsoluteOrientationEvent event) {
+        motionSensors.absoluteOrientationUpdateInterval =
+            Duration.microsecondsPerSecond ~/ 60;
+        _orientationSubscription = motionSensors.absoluteOrientation
+            .listen((AbsoluteOrientationEvent event) {
           orientation.setValues(event.yaw, event.pitch, event.roll);
           _updateView();
         });
@@ -304,7 +328,8 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
 
     _screenOrientSubscription?.cancel();
     if (widget.sensorControl != SensorControl.None) {
-      _screenOrientSubscription = motionSensors.screenOrientation.listen((ScreenOrientationEvent event) {
+      _screenOrientSubscription = motionSensors.screenOrientation
+          .listen((ScreenOrientationEvent event) {
         screenOrientationRad = radians(event.angle!);
       });
     }
@@ -312,10 +337,23 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
 
   void _updateTexture(ImageInfo imageInfo, bool synchronousCall) {
     surface?.mesh.texture = imageInfo.image;
-    surface?.mesh.textureRect = Rect.fromLTWH(0, 0, imageInfo.image.width.toDouble(), imageInfo.image.height.toDouble());
+    surface?.mesh.textureRect = Rect.fromLTWH(0, 0,
+        imageInfo.image.width.toDouble(), imageInfo.image.height.toDouble());
     scene!.texture = imageInfo.image;
     scene!.update();
     widget.onImageLoad?.call();
+  }
+
+  Future<void> _updateBgTexture() async {
+    final blurred = await BlurhashFFI.encode(widget.background!.image);
+    final image = await widget.background!.image.getImage();
+    surface1?.mesh.texture = await BlurhashFFI.decode(
+      blurred,
+      width: image.width,
+      height: image.height,
+    );
+    surface1?.mesh.textureRect =
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
   }
 
   void _loadTexture(ImageProvider? provider) {
@@ -326,7 +364,11 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     _imageStream!.addListener(listener);
   }
 
-  void _onSceneCreated(Scene scene) {
+  bool get needBg =>
+      widget.background != null &&
+      widget.croppedArea != const Rect.fromLTWH(0.0, 0.0, 1.0, 1.0);
+
+  Future<void> _onSceneCreated(Scene scene) async {
     this.scene = scene;
     final camera = scene.camera;
     camera.near = 1.0;
@@ -343,9 +385,32 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
         croppedFullWidth: widget.croppedFullWidth,
         croppedFullHeight: widget.croppedFullHeight,
       );
-      surface = Object(name: 'surface', mesh: mesh, backfaceCulling: false);
-      _loadTexture(widget.child!.image);
+      surface = Object(
+        name: 'surface',
+        mesh: mesh,
+        backfaceCulling: false,
+        scale: Vector3(0.95, 0.95, 0.95),
+      );
       scene.world.add(surface!);
+
+      if (needBg) {
+        try {
+          final Mesh mesh1 = generateSphereMesh(
+            radius: _radius,
+            latSegments: widget.latSegments,
+            lonSegments: widget.lonSegments,
+          );
+          surface1 = Object(
+            name: 'surface',
+            mesh: mesh1,
+            backfaceCulling: false,
+            scale: Vector3(1.0, 1.0, 1.0),
+          );
+          scene.world.add(surface1!);
+          await _updateBgTexture();
+        } catch (_) {}
+      }
+      _loadTexture(widget.child?.image);
       _updateView();
     }
   }
@@ -358,7 +423,8 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     final camera = scene!.camera;
 
     // transform viewport coordinate to NDC, values between -1 and 1
-    final v = Vector4(2.0 * x / camera.viewportWidth - 1.0, 1.0 - 2.0 * y / camera.viewportHeight, 1.0, 1.0);
+    final v = Vector4(2.0 * x / camera.viewportWidth - 1.0,
+        1.0 - 2.0 * y / camera.viewportHeight, 1.0, 1.0);
     // create projection matrix
     final m = camera.projectionMatrix * camera.lookAtMatrix;
     // apply inversed projection matrix
@@ -369,14 +435,17 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     // get rotation from two vectors
     final q = Quaternion.fromTwoVectors(v.xyz, Vector3(0.0, 0.0, -_radius));
     // get euler angles from rotation
-    return quaternionToOrientation(q * Quaternion.axisAngle(Vector3(0, 1, 0), _halfPi));
+    return quaternionToOrientation(
+        q * Quaternion.axisAngle(Vector3(0, 1, 0), _halfPi));
   }
 
   Vector3 positionFromLatLon(double lat, double lon) {
     final camera = scene!.camera;
 
     // create projection matrix
-    final Matrix4 m = camera.projectionMatrix * camera.lookAtMatrix * matrixFromLatLon(lat, lon);
+    final Matrix4 m = camera.projectionMatrix *
+        camera.lookAtMatrix *
+        matrixFromLatLon(lat, lon);
     // apply projection matrix
     final Vector4 v = Vector4(0.0, 0.0, -_radius, 1.0)..applyMatrix4(m);
     // apply perspective division and transform NDC to the viewport coordinate
@@ -392,8 +461,10 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
     if (hotspots != null && scene != null) {
       for (Hotspot hotspot in hotspots) {
         final pos = positionFromLatLon(hotspot.latitude, hotspot.longitude);
-        final origin = Offset(hotspot.width * hotspot.orgin.dx, hotspot.height * hotspot.orgin.dy);
-        final transform = scene!.camera.lookAtMatrix * matrixFromLatLon(hotspot.latitude, hotspot.longitude);
+        final origin = Offset(hotspot.width * hotspot.orgin.dx,
+            hotspot.height * hotspot.orgin.dy);
+        final transform = scene!.camera.lookAtMatrix *
+            matrixFromLatLon(hotspot.latitude, hotspot.longitude);
         final child = Positioned(
           left: pos.x - origin.dx,
           top: pos.y - origin.dy,
@@ -424,7 +495,9 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
 
     _updateSensorControl();
 
-    _controller = AnimationController(duration: Duration(milliseconds: 60000), vsync: this)..addListener(_updateView);
+    _controller = AnimationController(
+        duration: Duration(milliseconds: 60000), vsync: this)
+      ..addListener(_updateView);
     if (widget.sensorControl != SensorControl.None) _controller.repeat();
   }
 
@@ -442,8 +515,18 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
   void didUpdateWidget(Panorama oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (surface == null) return;
-    if (widget.latSegments != oldWidget.latSegments || widget.lonSegments != oldWidget.lonSegments || widget.croppedArea != oldWidget.croppedArea || widget.croppedFullWidth != oldWidget.croppedFullWidth || widget.croppedFullHeight != oldWidget.croppedFullHeight) {
-      surface!.mesh = generateSphereMesh(radius: _radius, latSegments: widget.latSegments, lonSegments: widget.lonSegments, croppedArea: widget.croppedArea, croppedFullWidth: widget.croppedFullWidth, croppedFullHeight: widget.croppedFullHeight);
+    if (widget.latSegments != oldWidget.latSegments ||
+        widget.lonSegments != oldWidget.lonSegments ||
+        widget.croppedArea != oldWidget.croppedArea ||
+        widget.croppedFullWidth != oldWidget.croppedFullWidth ||
+        widget.croppedFullHeight != oldWidget.croppedFullHeight) {
+      surface!.mesh = generateSphereMesh(
+          radius: _radius,
+          latSegments: widget.latSegments,
+          lonSegments: widget.lonSegments,
+          croppedArea: widget.croppedArea,
+          croppedFullWidth: widget.croppedFullWidth,
+          croppedFullHeight: widget.croppedFullHeight);
     }
     if (widget.child?.image != oldWidget.child?.image) {
       _loadTexture(widget.child?.image);
@@ -473,9 +556,13 @@ class _PanoramaState extends State<Panorama> with SingleTickerProviderStateMixin
             onScaleUpdate: _handleScaleUpdate,
             onScaleEnd: _handleScaleEnd,
             onTapUp: widget.onTap == null ? null : _handleTapUp,
-            onLongPressStart: widget.onLongPressStart == null ? null : _handleLongPressStart,
-            onLongPressMoveUpdate: widget.onLongPressMoveUpdate == null ? null : _handleLongPressMoveUpdate,
-            onLongPressEnd: widget.onLongPressEnd == null ? null : _handleLongPressEnd,
+            onLongPressStart:
+                widget.onLongPressStart == null ? null : _handleLongPressStart,
+            onLongPressMoveUpdate: widget.onLongPressMoveUpdate == null
+                ? null
+                : _handleLongPressMoveUpdate,
+            onLongPressEnd:
+                widget.onLongPressEnd == null ? null : _handleLongPressEnd,
             child: pano,
           )
         : pano;
@@ -514,22 +601,33 @@ class Hotspot {
   Widget? widget;
 }
 
-Mesh generateSphereMesh({num radius = 1.0, int latSegments = 16, int lonSegments = 16, ui.Image? texture, Rect croppedArea = const Rect.fromLTWH(0.0, 0.0, 1.0, 1.0), double croppedFullWidth = 1.0, double croppedFullHeight = 1.0}) {
+Mesh generateSphereMesh(
+    {num radius = 1.0,
+    int latSegments = 16,
+    int lonSegments = 16,
+    ui.Image? texture,
+    Rect croppedArea = const Rect.fromLTWH(0.0, 0.0, 1.0, 1.0),
+    double croppedFullWidth = 1.0,
+    double croppedFullHeight = 1.0}) {
   int count = (latSegments + 1) * (lonSegments + 1);
   List<Vector3> vertices = List<Vector3>.filled(count, Vector3.zero());
   List<Offset> texcoords = List<Offset>.filled(count, Offset.zero);
-  List<Polygon> indices = List<Polygon>.filled(latSegments * lonSegments * 2, Polygon(0, 0, 0));
+  List<Polygon> indices =
+      List<Polygon>.filled(latSegments * lonSegments * 2, Polygon(0, 0, 0));
 
   int i = 0;
   for (int y = 0; y <= latSegments; ++y) {
     final double tv = y / latSegments;
-    final double v = (croppedArea.top + croppedArea.height * tv) / croppedFullHeight;
+    final double v =
+        (croppedArea.top + croppedArea.height * tv) / croppedFullHeight;
     final double sv = math.sin(v * math.pi);
     final double cv = math.cos(v * math.pi);
     for (int x = 0; x <= lonSegments; ++x) {
       final double tu = x / lonSegments;
-      final double u = (croppedArea.left + croppedArea.width * tu) / croppedFullWidth;
-      vertices[i] = Vector3(radius * math.cos(u * math.pi * 2.0) * sv, radius * cv, radius * math.sin(u * math.pi * 2.0) * sv);
+      final double u =
+          (croppedArea.left + croppedArea.width * tu) / croppedFullWidth;
+      vertices[i] = Vector3(radius * math.cos(u * math.pi * 2.0) * sv,
+          radius * cv, radius * math.sin(u * math.pi * 2.0) * sv);
       texcoords[i] = Offset(tu, 1.0 - tv);
       i++;
     }
@@ -545,7 +643,11 @@ Mesh generateSphereMesh({num radius = 1.0, int latSegments = 16, int lonSegments
     }
   }
 
-  final Mesh mesh = Mesh(vertices: vertices, texcoords: texcoords, indices: indices, texture: texture);
+  final Mesh mesh = Mesh(
+      vertices: vertices,
+      texcoords: texcoords,
+      indices: indices,
+      texture: texture);
   return mesh;
 }
 
@@ -558,9 +660,11 @@ Vector3 quaternionToOrientation(Quaternion q) {
   final double y = storage[1];
   final double z = storage[2];
   final double w = storage[3];
-  final double roll = math.atan2(-2 * (x * y - w * z), 1.0 - 2 * (x * x + z * z));
+  final double roll =
+      math.atan2(-2 * (x * y - w * z), 1.0 - 2 * (x * x + z * z));
   final double pitch = math.asin(2 * (y * z + w * x));
-  final double yaw = math.atan2(-2 * (x * z - w * y), 1.0 - 2 * (x * x + y * y));
+  final double yaw =
+      math.atan2(-2 * (x * z - w * y), 1.0 - 2 * (x * x + y * y));
   return Vector3(yaw, pitch, roll);
 }
 
@@ -570,4 +674,23 @@ Quaternion orientationToQuaternion(Vector3 v) {
   m.rotateX(v.y);
   m.rotateY(v.x);
   return Quaternion.fromRotation(m.getRotation());
+}
+
+extension ImageTool on ImageProvider {
+  Future<ui.Image> getImage() async {
+    final imageStream = resolve(const ImageConfiguration());
+    final Completer<ui.Image?> completer = Completer<ui.Image?>();
+    final ImageStreamListener listener = ImageStreamListener(
+      (imageInfo, synchronousCall) async {
+        final image = imageInfo.image;
+        if (!completer.isCompleted) {
+          completer.complete(image);
+        }
+      },
+    );
+    imageStream.addListener(listener);
+    final imageBytes = await completer.future;
+    imageStream.removeListener(listener);
+    return imageBytes!;
+  }
 }

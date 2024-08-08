@@ -8,6 +8,7 @@ environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
+  blurhash_ffi: ^1.2.6
   flutter:
     sdk: flutter
   flutter_cube:
