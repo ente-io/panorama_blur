@@ -30,7 +30,7 @@ class _MyHomePageState extends State<MyHomePage> {
   double _lon = 0;
   double _lat = 0;
   double _tilt = 0;
-  int _panoId = 0;
+  int _panoId = 2;
   List<Image> panoImages = [
     Image.asset('assets/panorama.jpg'),
     Image.asset('assets/panorama2.webp'),
@@ -127,6 +127,7 @@ class _MyHomePageState extends State<MyHomePage> {
           croppedArea: Rect.fromLTWH(2533.0, 1265.0, 5065.0, 2533.0),
           croppedFullWidth: 10132.0,
           croppedFullHeight: 5066.0,
+          background: Image.asset('assets/panorama_cropped_thumb.jpg'),
           child: Image.asset('assets/panorama_cropped.jpg'),
           hotspots: [
             Hotspot(

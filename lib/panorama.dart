@@ -4,7 +4,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:blurhash_ffi/blurhash_ffi.dart';
+import 'package:image/image.dart' as image;
 import 'package:flutter/material.dart';
 import 'package:flutter_cube/flutter_cube.dart';
 import 'package:motion_sensors/motion_sensors.dart';
@@ -344,15 +344,16 @@ class _PanoramaState extends State<Panorama>
   }
 
   Future<void> _updateBgTexture() async {
-    final blurred = await BlurhashFFI.encode(widget.background!.image);
-    final image = await widget.background!.image.getImage();
-    surface1?.mesh.texture = await BlurhashFFI.decode(
-      blurred,
-      width: image.width,
-      height: image.height,
+    final uiImage = await widget.background!.image.getImage();
+    final img = image.Image.fromBytes(
+      width: uiImage.width,
+      height: uiImage.height,
+      bytes: (await uiImage.toByteData())!.buffer,
     );
+    final blurred = image.gaussianBlur(img, radius: 10);
+    surface1?.mesh.texture = await decodeImageFromList(blurred.getBytes());
     surface1?.mesh.textureRect =
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble());
   }
 
   void _loadTexture(ImageProvider? provider) {
