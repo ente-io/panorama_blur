@@ -2,9 +2,10 @@ library panorama;
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:image/image.dart' as image;
+import 'package:image/image.dart' as img;
 import 'package:flutter/material.dart';
 import 'package:flutter_cube/flutter_cube.dart';
 import 'package:motion_sensors/motion_sensors.dart';
@@ -344,16 +345,10 @@ class _PanoramaState extends State<Panorama>
   }
 
   Future<void> _updateBgTexture() async {
-    final uiImage = await widget.background!.image.getImage();
-    final img = image.Image.fromBytes(
-      width: uiImage.width,
-      height: uiImage.height,
-      bytes: (await uiImage.toByteData())!.buffer,
-    );
-    final blurred = image.gaussianBlur(img, radius: 10);
-    surface1?.mesh.texture = await decodeImageFromList(blurred.getBytes());
-    surface1?.mesh.textureRect =
-        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble());
+    final blurredImg = await widget.background!.image.blurredImage();
+    surface1?.mesh.texture = blurredImg;
+    surface1?.mesh.textureRect = Rect.fromLTWH(
+        0, 0, blurredImg.width.toDouble(), blurredImg.height.toDouble());
   }
 
   void _loadTexture(ImageProvider? provider) {
@@ -692,5 +687,24 @@ extension ImageTool on ImageProvider {
     final imageBytes = await completer.future;
     imageStream.removeListener(listener);
     return imageBytes!;
+  }
+
+  Future<ui.Image> blurredImage() async {
+    final id = await getImage();
+    final uiBytes = await id.toByteData();
+
+    final image = img.Image.fromBytes(
+        width: id.width,
+        height: id.height,
+        bytes: uiBytes!.buffer,
+        numChannels: 4);
+    final blurred = img.gaussianBlur(image, radius: 10);
+    final completer = Completer<ui.Image>();
+
+    final codec = await ui
+        .instantiateImageCodec(Uint8List.fromList(img.encodeJpg(blurred)));
+    final frame = await codec.getNextFrame();
+    completer.complete(frame.image);
+    return completer.future;
   }
 }
